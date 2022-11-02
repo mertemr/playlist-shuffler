@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>550</height>
+    <width>816</width>
+    <height>588</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -39,7 +39,7 @@
     </item>
     <item row="1" column="1">
      <layout class="QGridLayout" name="gridLayout">
-      <item row="0" column="0">
+      <item row="1" column="0">
        <layout class="QVBoxLayout" name="verticalLayout">
         <item>
          <widget class="QPushButton" name="button_getPlaylists">
@@ -157,6 +157,16 @@
        </layout>
       </item>
       <item row="0" column="1">
+       <widget class="QLineEdit" name="search_query"/>
+      </item>
+      <item row="0" column="2">
+       <widget class="QPushButton" name="button_search">
+        <property name="text">
+         <string>PushButton</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
        <widget class="QTreeView" name="playlists_tree">
         <property name="tabKeyNavigation">
          <bool>true</bool>

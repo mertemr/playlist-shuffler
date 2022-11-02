@@ -24,6 +24,11 @@ def msgbox(msg: str, type: int, title: str = DEFAULT_TITLE):
     return MessageBoxEx(0, msg, title, type)
 
 
+# class SearchWindow(QtWidgets.QWidget):
+#     def __init__(self):
+#         super().__init__()
+        
+
 class Window(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -50,12 +55,42 @@ class Window(QtWidgets.QMainWindow):
         self.button_export.clicked.connect(self.exportPlaylist)
         self.button_getPlaylists.clicked.connect(self.getPlaylists)
         
+        self.button_search: QtWidgets.QPushButton
+        self.search_query: QtWidgets.QLineEdit
+        
+        self.button_search.clicked.connect(self.searchEvent)
+        
         self.selected_tree = None
         self.playlists_tree: QtWidgets.QTreeView
         # self.playlists_tree.clicked.connect(self.changeSelected)
         # self.playlists_tree.connect(self.changeSelected)
         
-       
+    def searchEvent(self):
+        t = self.search_query.text()
+        data = self.spotify.search_query(t)
+        # with open("searchquery.json", 'w', encoding="UTF-8") as f:
+        #     json.dump(
+        #         data, f, indent=4, ensure_ascii=False
+        #     )
+        wid = QtWidgets.QWidget()
+        wid.setWindowTitle("Search results")
+        loadUi("./app/search_ui.ui", wid)
+        
+        qlw: QtWidgets.QListWidget = wid.search_list
+        
+        for d in dict(data)['tracks']['items']:
+            song_url = d['external_urls']['spotify']
+            song_name = d['name']
+            album_id = d['album']['id']
+            artists = [
+                (i['name'], i['id']) for i in d['artists'] 
+            ]
+            item = QtWidgets.QListWidgetItem(f"{song_name}, {artists}, {song_url}, {album_id}")
+            qlw.addItem(item)
+        
+        wid.show()
+        
+            
     def changeSelected(self):
         x = self.playlists_tree.currentIndex()
         if self.playlists_tree.rootIndex():

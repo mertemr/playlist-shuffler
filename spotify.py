@@ -37,6 +37,10 @@ class Spotify:
     def get_playlists(self):
         return self.spotify.current_user_playlists()
     
+    def search_query(self, q: str):
+        query = self.spotify.search(q)
+        return query
+    
     def get_playlists_songs(self):
         playlists = self.get_playlists()
         PLAYLISTS = {}
