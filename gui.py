@@ -1,79 +1,84 @@
 import json
-import sys
 import random
-from typing import List
-
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import List, Union
 
-import PyQt6.QtCore as QtCore
-from PyQt6.QtCore import Qt 
-import PyQt6.QtGui as QtGui
-import PyQt6.QtWidgets as QtWidgets
-from PyQt6.uic.load_ui import loadUi
-
-import qdarkstyle
 from win32api import MessageBoxEx
 
-from app.globals import DEFAULT_TITLE, UI_FILE_LOCATION, CWD
-from app.utils import StandardItem
+import PyQt6.QtCore as QtCore
+import PyQt6.QtGui as QtGui
+# import PyQt6.QtWidgets as QtWidgets
+
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QStatusBar,
+    QPushButton,
+    QTreeView,
+    QLineEdit,
+    QFileDialog
+)
+
+from PyQt6.QtCore import Qt
+from PyQt6.uic.load_ui import loadUi
+import qdarkstyle
+
+from app.globals import CWD, DEFAULT_TITLE, UI_FILE_LOCATION
 from app.search_gui import SearchWindow
+from app.utils import StandardItem
+
 from spotify import Spotify
 
-
+    
 def msgbox(msg: str, type: int, title: str = DEFAULT_TITLE):
     return MessageBoxEx(0, msg, title, type)
-       
 
-class Window(QtWidgets.QMainWindow):
+class Window(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         loadUi(UI_FILE_LOCATION, self)
-        self.initialize()
-        self.show()
-
-    def initialize(self):
+        self.init_window()
         self.search_widget = SearchWindow()
-        
-        self.expires_at = 0
-        self.spotify = Spotify()
         self.playlists_dict = {}
         self.last_path = str(CWD)
+        self.show()
 
-        self.statusBar: QtWidgets.QStatusBar
-        self.button_getPlaylists: QtWidgets.QPushButton
+    def init_window(self):
+        self.statusBar: QStatusBar
+        self.button_getPlaylists: QPushButton
 
-        self.button_import: QtWidgets.QPushButton
-        self.button_export: QtWidgets.QPushButton
+        self.button_import: QPushButton
+        self.button_export: QPushButton
 
-        self.button_shuffleSelected: QtWidgets.QPushButton
-        self.button_uploadSelected: QtWidgets.QPushButton
+        self.button_shuffleSelected: QPushButton
+        self.button_uploadSelected: QPushButton
 
+        
+        self.button_search: QPushButton
+        self.search_query: QLineEdit
+        
         self.button_shuffleSelected.clicked.connect(self.shuffleSelectedList)
         self.button_import.clicked.connect(self.importPlaylist)
         self.button_export.clicked.connect(self.exportPlaylist)
         self.button_getPlaylists.clicked.connect(self.getPlaylists)
-        
-        self.button_search: QtWidgets.QPushButton
-        self.search_query: QtWidgets.QLineEdit
-        
         self.button_search.clicked.connect(self.searchEvent)
         
         self.selected_item = None
         self.changed_lists = {}
-        self.playlists_tree: QtWidgets.QTreeView
-        # self.playlists_tree.clicked.connect(self.changeSelected)
-        # self.playlists_tree.connect(self.changeSelected)
-
+        self.playlists_tree: QTreeView
+        
+        self.spotify = Spotify()
+        self.renewTokenIfExpired()
+        
     def shuffleSelectedList(self):
         t = self.playlists_tree.currentIndex()
         if t.data() == None:  # Not selected anything
             return
         
-        while True:
-            x, t = t, t.parent()
-            if t.data() == None:
-                break
+        while not t.data() is None:
+            x, t = t, t.parent()  # Get parent
         
         col, row = x.column(), x.row()
         
@@ -83,22 +88,21 @@ class Window(QtWidgets.QMainWindow):
                 for song in j['tracks']:
                     songs.append(song)
                 break
-            
-        self.Model.removeColumn(col)
+        
+        self.Model.removeRow(col)
         random.shuffle(songs)
         
         playlist = StandardItem(j["name"], bold=True)
         for _, song_name in songs:
             item = StandardItem(song_name, size=8, color=(199, 255, 238))
             playlist.appendRow(item)
-
+        
         self.Model.appendRow(playlist)
         print(songs)
             
         # items = self.Model.findItems)(x.data())
         # self.Model.index(
         # )
-        
         
     def searchEvent(self):
         t = self.search_query.text()
@@ -116,7 +120,7 @@ class Window(QtWidgets.QMainWindow):
             self.selected_item = x.parent()
 
     def importPlaylist(self):
-        file = QtWidgets.QFileDialog.getOpenFileName(
+        file = QFileDialog.getOpenFileName(
             self, "Open File", self.last_path, "Playlist Json File (*.json)"
         )[0]
 
@@ -139,21 +143,12 @@ class Window(QtWidgets.QMainWindow):
         self.disable_buttons()
         return self.setTreeView(playlists)
 
-    def enable_buttons(self):
-        self.button_export.setEnabled(True)
-        self.button_shuffleSelected.setEnabled(True)
-        self.button_uploadSelected.setEnabled(True)
-        
-    def disable_buttons(self):
-        self.button_export.setEnabled(False)
-        self.button_shuffleSelected.setEnabled(False)
-        self.button_uploadSelected.setEnabled(False)
         
     def exportPlaylist(self):
         if not self.playlists_dict:
             return msgbox("No playlist found.", 32)
 
-        file = QtWidgets.QFileDialog.getSaveFileName(
+        file = QFileDialog.getSaveFileName(
             self, "Save playlist", self.last_path, "Playlist Json File (*.json)"
         )[0]
 
@@ -169,32 +164,33 @@ class Window(QtWidgets.QMainWindow):
             msgbox("File cannot saved.", 16)
 
     def spotify_connect(self):
-        if self.tokenExpired():
+        if self.renewTokenIfExpired():
             self.spotify.refresh_token(self.spotify.get_credentials())
 
-    def tokenExpired(self):
+    def renewTokenIfExpired(self):
+        def getNewToken():
+            token = self.spotify.get_credentials()
+            self.spotify.refresh_token(token)
+        
         file = Path("./.spotify_cache")
+        
         if not file.exists():
             self.statusBar.showMessage("Not connected!")
-            return True
+            return getNewToken()
 
         now = datetime.utcnow()
         expire_at = datetime.utcfromtimestamp(
             json.loads(file.read_text(encoding="UTF-8"))["expires_at"]
         )
         delta = expire_at - now
-        self.expires_at = expire_at
 
         if delta < timedelta(seconds=0):
             self.statusBar.showMessage("Token Expired!")
-            return True
+            return getNewToken()
 
         self.statusBar.showMessage("Connected!")
-        return False
+        return
 
-    def getNewToken(self):
-        token = self.spotify.get_credentials()
-        self.spotify.refresh_token(token)
 
     def getPlaylists(self):
         self.button_getPlaylists.setText("Refresh")
@@ -223,7 +219,18 @@ class Window(QtWidgets.QMainWindow):
         selectionmodel = self.playlists_tree.selectionModel()
         selectionmodel.selectionChanged.connect(self.changeSelected)
 
-app = QtWidgets.QApplication([])
+    def enable_buttons(self):
+        self.button_export.setEnabled(True)
+        self.button_shuffleSelected.setEnabled(True)
+        self.button_uploadSelected.setEnabled(True)
+        
+    def disable_buttons(self):
+        self.button_export.setEnabled(False)
+        self.button_shuffleSelected.setEnabled(False)
+        self.button_uploadSelected.setEnabled(False)
+
+
+app = QApplication([])
 
 dark_stylesheet = qdarkstyle.load_stylesheet(qt_api="pyqt6")
 app.setStyleSheet(dark_stylesheet)
