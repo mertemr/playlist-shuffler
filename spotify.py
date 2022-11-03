@@ -2,6 +2,7 @@ from typing import List
 import dotenv
 import os
 import spotipy
+import sys
 import threading
 
 class Spotify:
@@ -60,7 +61,7 @@ class Spotify:
                     songs.append((_track["track"]["id"], _track["track"]["name"]))
                 
                 PLAYLISTS[_playlist['id']]['tracks'].extend(songs)
-                print(f"extended {_playlist['name']}")
+                sys.stdout.write("imported %s\n" % _playlist['name'])
                 
                 if not len(songs) == 100:
                     break

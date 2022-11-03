@@ -1,11 +1,13 @@
 import json
 import sys
+import random
 from typing import List
 
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import PyQt6.QtCore as QtCore
+from PyQt6.QtCore import Qt 
 import PyQt6.QtGui as QtGui
 import PyQt6.QtWidgets as QtWidgets
 from PyQt6.uic.load_ui import loadUi
@@ -15,18 +17,13 @@ from win32api import MessageBoxEx
 
 from app.globals import DEFAULT_TITLE, UI_FILE_LOCATION, CWD
 from app.utils import StandardItem
-
+from app.search_gui import SearchWindow
 from spotify import Spotify
 
 
 def msgbox(msg: str, type: int, title: str = DEFAULT_TITLE):
     return MessageBoxEx(0, msg, title, type)
-
-
-# class SearchWindow(QtWidgets.QWidget):
-#     def __init__(self):
-#         super().__init__()
-        
+       
 
 class Window(QtWidgets.QMainWindow):
     def __init__(self) -> None:
@@ -36,6 +33,8 @@ class Window(QtWidgets.QMainWindow):
         self.show()
 
     def initialize(self):
+        self.search_widget = SearchWindow()
+        
         self.expires_at = 0
         self.spotify = Spotify()
         self.playlists_dict = {}
@@ -61,40 +60,54 @@ class Window(QtWidgets.QMainWindow):
         self.button_search.clicked.connect(self.searchEvent)
         
         self.selected_item = None
+        self.changed_lists = {}
         self.playlists_tree: QtWidgets.QTreeView
         # self.playlists_tree.clicked.connect(self.changeSelected)
         # self.playlists_tree.connect(self.changeSelected)
 
     def shuffleSelectedList(self):
-        ... # TODO get selected row and childs.
-            # shuffle list
+        t = self.playlists_tree.currentIndex()
+        if t.data() == None:  # Not selected anything
+            return
+        
+        while True:
+            x, t = t, t.parent()
+            if t.data() == None:
+                break
+        
+        col, row = x.column(), x.row()
+        
+        songs = []
+        for _,j in self.playlists_dict.items():
+            if j['name'] == x.data():
+                for song in j['tracks']:
+                    songs.append(song)
+                break
+            
+        self.Model.removeColumn(col)
+        random.shuffle(songs)
+        
+        playlist = StandardItem(j["name"], bold=True)
+        for _, song_name in songs:
+            item = StandardItem(song_name, size=8, color=(199, 255, 238))
+            playlist.appendRow(item)
+
+        self.Model.appendRow(playlist)
+        print(songs)
+            
+        # items = self.Model.findItems)(x.data())
+        # self.Model.index(
+        # )
+        
         
     def searchEvent(self):
         t = self.search_query.text()
-        data = self.spotify.search_query(t)
-        # with open("searchquery.json", 'w', encoding="UTF-8") as f:
-        #     json.dump(
-        #         data, f, indent=4, ensure_ascii=False
-        #     )
-        wid = QtWidgets.QWidget()
-        wid.setWindowTitle("Search results")
-        loadUi("./app/search_ui.ui", wid)
+        self.search_widget.search(self.spotify.search_query(t))
+        if not self.search_widget.isVisible():
+            self.search_widget.show()
+        else:
+            self.search_widget.focusWidget()
         
-        qlw: QtWidgets.QListWidget = wid.search_list
-        
-        for d in dict(data)['tracks']['items']:
-            song_url = d['external_urls']['spotify']
-            song_name = d['name']
-            album_id = d['album']['id']
-            artists = [
-                (i['name'], i['id']) for i in d['artists'] 
-            ]
-            item = QtWidgets.QListWidgetItem(f"{song_name}, {artists}, {song_url}, {album_id}")
-            qlw.addItem(item)
-        
-        wid.show()
-        
-            
     def changeSelected(self):
         x = self.playlists_tree.currentIndex()
         
@@ -191,25 +204,24 @@ class Window(QtWidgets.QMainWindow):
         return self.setTreeView(playlists)
 
     def setTreeView(self, playlists: dict):
-        model = QtGui.QStandardItemModel()
-        Root = model.invisibleRootItem()
+        self.Model = QtGui.QStandardItemModel()
+        self.Root = self.Model.invisibleRootItem()
 
-        for pid, ps in sorted(playlists.items(), key=lambda x: x[1]["name"]):
+        for __pid, ps in sorted(playlists.items(), key=lambda x: x[1]["name"]):
             playlist = StandardItem(ps["name"], bold=True)
-            for song_id, song_name in ps["tracks"]:
+            for __song_id, song_name in ps["tracks"]:
                 item = StandardItem(song_name, size=8, color=(199, 255, 238))
                 playlist.appendRow(item)
 
-            Root.appendRow(playlist)
+            self.Root.appendRow(playlist)
 
         self.enable_buttons()
         
-        self.playlists_tree.setModel(model)
+        self.playlists_tree.setModel(self.Model)
         self.playlists_tree.clearSelection()
 
-        model = self.playlists_tree.selectionModel()
-        model.selectionChanged.connect(self.changeSelected)
-
+        selectionmodel = self.playlists_tree.selectionModel()
+        selectionmodel.selectionChanged.connect(self.changeSelected)
 
 app = QtWidgets.QApplication([])
 
